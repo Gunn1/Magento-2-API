@@ -1,20 +1,17 @@
-from numpy import append
 import requests
 import math
 import os
-# from openpyxl import load_workbook
-# from pandas import json_normalize, read_excel
 from datetime import datetime, timedelta
-# import pandas as pd
 import threading
 from typing import Optional
 from getpass import getpass
 import time
-
 import json
 from datetime import datetime
 import os
 from pathlib import Path
+import pandas as pd
+from openpyxl import load_workbook
 
 def get_desktop_path():
     """
@@ -902,6 +899,13 @@ class Params:
         return params_dict
 
 class LoginController:
+    """
+    A controller class for managing the login process to the API. 
+
+    This class handles user authentication, stores the session token, 
+    and checks the validity of the login session based on the token expiration time.
+    """
+
     token = None
     store = "default"
     api_endpoint = f"https://admin.reedssports.com/rest/{store}/V1"
@@ -910,6 +914,8 @@ class LoginController:
     token_expiration = timedelta(hours=4)  # Set the token expiration time (4 hours in this example)
 
     def __init__(self, username=None, password=None):
+        """Initialize the LoginController with a username and password. 
+        If not provided, prompts the user for input."""
         self.username = username
         self.password = password
         if not self.username or not self.password:
@@ -917,6 +923,8 @@ class LoginController:
             self.password = getpass()
 
     def login(self):
+        """Logs in the user by sending a POST request to the API's token endpoint.
+        If successful, stores the token and sets the logged-in status and login time."""
         endpoint = self.api_endpoint + "/integration/admin/token"
         payload = {"username": self.username, "password": self.password}
         headers = {"Content-Type": "application/json"}
@@ -934,8 +942,9 @@ class LoginController:
             print("Login failed")
             raise InvalidCredentialsError("Please log in to access product details.")
 
-
     def is_logged_in(self):
+        """Checks if the user is currently logged in by verifying the token's validity.
+        If the token has expired, returns False and updates the logged-in status."""
         if not self.logged_in:
             return False
 
@@ -949,6 +958,7 @@ class LoginController:
             return False
         else:
             return True
+
 
 class Magento:
     def make_api_request(self, endpoint: str, params: Params = None, request_type: str = "get", data: dict = None,json:dict = None) -> dict:
@@ -1002,30 +1012,30 @@ class Magento:
         else:
             raise APIRequestError(f"Failed to fetch data from {endpoint}" + response.text)
     
-    def save_details(self, data, type):
-        self.type = type
-        if not self.login_controller.is_logged_in():
-            raise InvalidCredentialsError("Please log in to access product details.")
-        try:
-            if self.type == 1:
-                print("Product")
-                df = json_normalize(data)
-                # Specify the columns containing nested dictionaries that you want to normalize further
-                columns_to_normalize = ['media_gallery_entries', 'custom_attributes','extension_attributes.category_links','extension_attributes.configurable_product_options']
-                for column in columns_to_normalize:
-                    if column in df.columns:
-                        normalized_data = json_normalize(df.pop(column))
-                        df = df.join(normalized_data.add_prefix(f'{column}.'))
+    # def save_details(self, data, type):
+    #     self.type = type
+    #     if not self.login_controller.is_logged_in():
+    #         raise InvalidCredentialsError("Please log in to access product details.")
+    #     try:
+    #         if self.type == 1:
+    #             print("Product")
+    #             df = json_normalize(data)
+    #             # Specify the columns containing nested dictionaries that you want to normalize further
+    #             columns_to_normalize = ['media_gallery_entries', 'custom_attributes','extension_attributes.category_links','extension_attributes.configurable_product_options']
+    #             for column in columns_to_normalize:
+    #                 if column in df.columns:
+    #                     normalized_data = json_normalize(df.pop(column))
+    #                     df = df.join(normalized_data.add_prefix(f'{column}.'))
 
-                df.to_excel('./Output.xlsx', index=False)
+    #             df.to_excel('./Output.xlsx', index=False)
 
-            elif self.type == 2:
-                print("Order")
-                df = json_normalize(data)
-                # Specify the columns containing nested dictionaries that you want to normalize further
-                df.to_excel('./Output.xlsx', index=False)
-        except PermissionError as e:
-            print("Sorry You don't have access to write to that file please close it.")
+    #         elif self.type == 2:
+    #             print("Order")
+    #             df = json_normalize(data)
+    #             # Specify the columns containing nested dictionaries that you want to normalize further
+    #             df.to_excel('./Output.xlsx', index=False)
+    #     except PermissionError as e:
+    #         print("Sorry You don't have access to write to that file please close it.")
     def get_all_stores(self) -> dict:
         """
         Retrieves a mapping of all store IDs to their corresponding store codes.
@@ -1062,28 +1072,28 @@ class Magento:
                 print(f"Warning: Unexpected structure in store data: {store}")
 
         return store_mapping
-    def export_details(self,type):
-                # Read the Excel file into a Pandas DataFrame
-        df = read_excel('./Output.xlsx')
+    # def export_details(self,type):
+    #             # Read the Excel file into a Pandas DataFrame
+    #     df = read_excel('./Output.xlsx')
 
-        # Reverse the normalization process to reconstruct the nested structure
-        columns_to_denormalize = ['media_gallery_entries', 'custom_attributes','extension_attributes.category_links','extension_attributes.configurable_product_options']
-        denormalized_data = df.copy()
+    #     # Reverse the normalization process to reconstruct the nested structure
+    #     columns_to_denormalize = ['media_gallery_entries', 'custom_attributes','extension_attributes.category_links','extension_attributes.configurable_product_options']
+    #     denormalized_data = df.copy()
 
-        for column in columns_to_denormalize:
-            if f"{column}.0" in denormalized_data.columns:
-                # Collect columns related to the normalized data
-                related_columns = [col for col in denormalized_data.columns if col.startswith(f"{column}.")]
-                # Reconstruct the nested structure
-                nested_data = denormalized_data[related_columns].to_dict(orient='records')
-                # Replace the normalized columns with the reconstructed nested structure
-                denormalized_data[column] = nested_data
-                # Drop the intermediate columns
-                denormalized_data.drop(columns=related_columns, inplace=True)
+    #     for column in columns_to_denormalize:
+    #         if f"{column}.0" in denormalized_data.columns:
+    #             # Collect columns related to the normalized data
+    #             related_columns = [col for col in denormalized_data.columns if col.startswith(f"{column}.")]
+    #             # Reconstruct the nested structure
+    #             nested_data = denormalized_data[related_columns].to_dict(orient='records')
+    #             # Replace the normalized columns with the reconstructed nested structure
+    #             denormalized_data[column] = nested_data
+    #             # Drop the intermediate columns
+    #             denormalized_data.drop(columns=related_columns, inplace=True)
 
-        # Convert the DataFrame to a list of dictionaries
-        denormalized_list = denormalized_data.to_dict(orient='records')
-        print(denormalized_list)
+    #     # Convert the DataFrame to a list of dictionaries
+    #     denormalized_list = denormalized_data.to_dict(orient='records')
+    #     print(denormalized_list)
     
 class Customer(Magento):
     def __init__(self, login_controller):
@@ -1112,7 +1122,7 @@ class Customer(Magento):
         start_time = time.time()
         print(params.to_dict())
         # Make the API request
-        # response = self.make_api_request(endpoint, params=params)
+        response = self.make_api_request(endpoint, params=params)
         
         # Stop the timer
         end_time = time.time()
@@ -1610,49 +1620,79 @@ class ProductHandler(Magento):
 
 
 class OrderHandler(Magento):
+    """
+    A class to handle order-related operations using the Magento API.
+    
+    This class inherits from the Magento class and manages tasks like fetching orders,
+    canceling orders, adding totals to order data, and saving the data to an Excel file.
+    """
+
     def __init__(self, login_controller):
+        """Initializes the OrderHandler with a login controller.
+        
+        Sets up threading events and locks, checks login status, and logs in if necessary.
+        """
         self.error_event = threading.Event()  # Event to signal an error
-        self.orders_lock = threading.Lock()    # Lock for synchronizing access to orders list
+        self.orders_lock = threading.Lock()   # Lock for synchronizing access to orders list
         super().__init__()
         self.type = 2
         self.login_controller = login_controller
         if not self.login_controller.is_logged_in():
             self.login_controller.login()
+
     def fetch_orders_page(self, api_endpoint, headers, params):
+        """Fetches a single page of orders from the API.
+        
+        Sends a GET request to the orders endpoint and returns the response.
+        """
         orders_endpoint = f"{api_endpoint}/orders"
         response = requests.get(orders_endpoint, headers=headers, params=params)
         return response
-    def cancel_order(self,order_number: str) -> dict:
+
+    def cancel_order(self, order_number: str) -> dict:
+        """Attempts to cancel an order given its order number.
+        
+        Fetches order details, determines the order ID, and sends a POST request 
+        to cancel the order. Raises an error if the order cannot be canceled.
+        """
         order_data = self.get_order_details(order_number)
-        # status = order_data.get('items')[0].get('status')
         order_id = order_data.get('items', [])[0].get("entity_id")
         orders_endpoint = f"{self.login_controller.api_endpoint}/orders/{order_id}/cancel"
+        
         if self.make_api_request(orders_endpoint, request_type="post") == False:
             raise InvalidInputError(f"Order {order_number.rstrip()} Cannot Be Cancelled")
         else:
             return self.make_api_request(orders_endpoint, request_type="post")
+
     def add_totals(self, input_df):
-        numeric_columns = ['SubTotal', 'Shipping and Handling', 'Total Due','Total Paid','Grand Total','Total Refunded']
-
-
+        """Calculates the totals for specific numeric columns in the DataFrame.
+        
+        Sums up the numeric columns and appends a totals row to the DataFrame.
+        """
+        numeric_columns = ['SubTotal', 'Shipping and Handling', 'Total Due', 'Total Paid', 'Grand Total', 'Total Refunded']
         totals = input_df[numeric_columns].sum()
 
         # Create a dictionary for the totals row
         totals_row = {'Order#': '', 'Order Date': '', 'Customer Name': '',
-                    'Carrier Type': '', 'Ship-to Name': '', 'Shipping Address': 'Total',
-                    'SubTotal': int(totals['SubTotal']),
-                    'Shipping and Handling': int(totals['Shipping and Handling']),
-                    'Total Due': int(totals['Total Due']),
-                    'Total Paid': int(totals['Total Paid']),
-                    'Grand Total': int(totals['Grand Total']),
-                    'Total Refunded': int(totals['Total Refunded']),
-                    'PO Number': ''}
+                      'Carrier Type': '', 'Ship-to Name': '', 'Shipping Address': 'Total',
+                      'SubTotal': int(totals['SubTotal']),
+                      'Shipping and Handling': int(totals['Shipping and Handling']),
+                      'Total Due': int(totals['Total Due']),
+                      'Total Paid': int(totals['Total Paid']),
+                      'Grand Total': int(totals['Grand Total']),
+                      'Total Refunded': int(totals['Total Refunded']),
+                      'PO Number': ''}
 
         # Append the totals row to the DataFrame
-        print(type(input_df))
         df_with_totals = pd.concat([input_df, pd.DataFrame([totals_row])], ignore_index=True)
         return df_with_totals
+
     def save_to_excel(self, df, file_path):
+        """Saves the DataFrame to an Excel file.
+        
+        If the file already exists, it attempts to open and modify the existing file.
+        If not, it creates a new file. The data is written to a sheet named 'All_Orders'.
+        """
         file_exists = os.path.exists(file_path)
 
         if file_exists:
@@ -1664,93 +1704,168 @@ class OrderHandler(Magento):
 
             with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
                 try:
+                    # Remove the 'All_Orders' sheet if it already exists
                     idx = writer.book.sheetnames.index('All_Orders')
                     writer.book.remove(writer.book.worksheets[idx])
                 except ValueError:
                     pass  # 'All_Orders' sheet doesn't exist, no need to remove
 
+                # Write the DataFrame to the 'All_Orders' sheet
                 df.to_excel(writer, index=False, sheet_name='All_Orders', header=True)
         else:
+            # Create a new Excel file and write the DataFrame to the 'All_Orders' sheet
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='All_Orders')
 
     def fetch_orders(self, headers, params, orders):
+        """
+        Fetches orders from the API based on the provided headers and parameters.
+        
+        Args:
+            headers (dict): The headers to include in the API request, typically containing authorization info.
+            params (dict): The query parameters to include in the API request.
+            orders (list): A list to store the fetched orders.
+        
+        This method sends an API request to fetch orders based on the given parameters.
+        If the request is successful, the orders are processed and added to the shared orders list.
+        If an error occurs, it logs the error and sets the error event.
+        """
+        # Fetch a page of orders from the API
         response = self.fetch_orders_page(self.login_controller.api_endpoint, headers, params)
+        
         if response.status_code == 200:
+            # If the request is successful, process and add orders to the list
             fetched_orders = self.process_orders_data(response.json())
-            with self.orders_lock:  # Acquire lock before accessing orders list
+            
+            # Ensure thread-safe access to the orders list using a lock
+            with self.orders_lock:
                 orders.extend(fetched_orders)
         else:
+            # Log the error if the request fails
             print(f"Error occurred while retrieving order data: {response.text}")
-            self.error_event.set()  # Set the error event if an error occurs
-    
+            
+            # Set the error event to indicate an issue
+            self.error_event.set()
+
     def Reeds_API_orders_Search(self, store, access_token, file_save_location, file_name, date=None, shipment_date=None, customer_email=None, customer_last=None, total_paid=None, total_due=None, status=None, page=1, page_size=500, excel_file_path=None, skus=None):
+        """
+        Searches for orders using the Reeds API and exports them to an Excel file.
+        
+        Args:
+            store (str): The store identifier.
+            access_token (str): The access token for API authentication.
+            file_save_location (str): The directory where the Excel file will be saved.
+            file_name (str): The name of the Excel file.
+            date (tuple, optional): A date range for filtering orders.
+            shipment_date (tuple, optional): A shipment date range for filtering orders.
+            customer_email (str, optional): The customer's email address.
+            customer_last (str, optional): The customer's last name.
+            total_paid (float, optional): The total amount paid for filtering orders.
+            total_due (float, optional): The total amount due for filtering orders.
+            status (str, optional): The status of the orders for filtering.
+            page (int, optional): The current page of results to retrieve. Defaults to 1.
+            page_size (int, optional): The number of orders per page. Defaults to 500.
+            excel_file_path (str, optional): The path to save the Excel file.
+            skus (list, optional): A list of SKUs to filter orders by.
+        
+        This method retrieves orders from the Reeds API based on various filters,
+        processes the results using multiple threads, and exports the orders to an Excel file.
+        """
         headers = {"Authorization": f"Bearer {self.login_controller.token}"}
         orders = []
+
+        # Construct initial query parameters based on provided filters
         params = self.construct_query_params(store, date, shipment_date, customer_email, customer_last, total_paid, total_due, status, page, 1, skus)
+        
+        # Fetch the first page of orders to determine the total count
         response = self.fetch_orders_page(self.login_controller.api_endpoint, headers, params)
+        
         if response.status_code == 200:
             total_count = response.json().get('total_count', 0)
             if total_count > 0:
                 print("Total Count:", total_count)
-                # Now that we have total_count, we can start multithreading
                 threads = []
+                
                 while True:
+                    # Construct parameters for the current page
                     params = self.construct_query_params(store, date, shipment_date, customer_email, customer_last, total_paid, total_due, status, page, page_size, skus)
                     
-                    # Start a new thread for fetching orders
+                    # Start a new thread to fetch orders for the current page
                     thread = threading.Thread(target=self.fetch_orders, args=(headers, params, orders))
                     threads.append(thread)
                     thread.start()
 
-                    # Limit the number of threads to avoid overwhelming the system
-                    if len(threads) >= 5:  # Adjust this number based on your system's capability
+                    # Limit the number of active threads to avoid overloading the system
+                    if len(threads) >= 5:
                         for thread in threads:
                             thread.join()  # Wait for threads to finish
                             if self.error_event.is_set():
                                 print("An error occurred in one of the threads. Aborting.")
                                 return
-                        threads = []  # Reset the threads list
+                        threads = []  # Reset the threads list after joining
 
-                    # Break the loop if all orders are fetched or if an error occurred
+                    # Check if there are more pages to fetch or if an error occurred
                     if not self.has_more_pages(page, total_count, page_size) or self.error_event.is_set():
                         break
 
-                    # Increment page for the next iteration
+                    # Move to the next page
                     page += 1
 
-                # Join remaining threads
+                # Join any remaining threads
                 for thread in threads:
                     thread.join()
 
-                # Export orders to Excel after all threads finish
+                # Export the collected orders to an Excel file after all threads finish
                 self.export_orders_to_excel(orders, file_save_location, file_name, date)
             else:
                 print("No items found matching the search criteria.")
         else:
+            # Log the error if the initial request fails
             print(f"Error occurred while retrieving order data: {response.text}")
-        
 
     def construct_query_params(self, store, date, shipment_date, customer_email, customer_last, total_paid, total_due, status, page, page_size, skus):
+        """
+        Constructs the query parameters for the API request based on the provided filters.
+        
+        Args:
+            store (str): The store identifier.
+            date (tuple, optional): A date range for filtering orders.
+            shipment_date (tuple, optional): A shipment date range for filtering orders.
+            customer_email (str, optional): The customer's email address.
+            customer_last (str, optional): The customer's last name.
+            total_paid (float, optional): The total amount paid for filtering orders.
+            total_due (float, optional): The total amount due for filtering orders.
+            status (str, optional): The status of the orders for filtering.
+            page (int): The current page of results to retrieve.
+            page_size (int): The number of orders per page.
+            skus (list, optional): A list of SKUs to filter orders by.
+        
+        Returns:
+            dict: A dictionary of query parameters to be used in the API request.
+        
+        This method builds and returns a dictionary of parameters that will be used 
+        to filter and paginate the orders retrieved from the API.
+        """
+        # Convert the provided date range into datetime objects for filtering
         date1 = datetime.strptime(date[0], "%Y-%m-%d")
         date2 = datetime.strptime(date[1], "%Y-%m-%d")
-        print(date1)
+        
+        # Adjust the date range by one day before and after the given dates
         date1 = date1 + timedelta(days=-1)
-        print(date1)
         date2 = date2 + timedelta(days=1)
 
+        # Initialize the filter group for the query
         filtergroup = FilterGroup()
-        filtergroup.add_filter("eq",customer_email,'customer_email')
-        filtergroup.add_filter("",)
+        filtergroup.add_filter("eq", customer_email, 'customer_email')
+        filtergroup.add_filter("",)  # This seems to be a placeholder; may need further refinement
 
+        # Set up the initial parameters including pagination settings
         params = {
-            # 'searchCriteria[filterGroups][0][filters][0][field]': 'store_id',
-            # 'searchCriteria[filterGroups][0][filters][0][value]': int(store),
-            # 'searchCriteria[filterGroups][0][filters][0][conditionType]': 'eq',
             'searchCriteria[pageSize]': page_size,
-            'searchCriteria[currentPage]': int(page)  # Set the page number
+            'searchCriteria[currentPage]': int(page)  # Set the current page number
         }
         
+        # Add filters to the parameters based on the provided values
         if customer_email:
             params['searchCriteria[filterGroups][1][filters][0][field]'] = 'customer_email'
             params['searchCriteria[filterGroups][1][filters][0][value]'] = customer_email
@@ -1763,13 +1878,15 @@ class OrderHandler(Magento):
             params['searchCriteria[filterGroups][3][filters][0][field]'] = 'created_at'
             params['searchCriteria[filterGroups][3][filters][0][value]'] = date2
             params['searchCriteria[filterGroups][3][filters][0][conditionType]'] = 'to'
-        count = 4
+
+        count = 4  # Used to keep track of the filter group index
+
         if customer_last:
             params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'customer_lastname'
             params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = customer_last
             params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'eq'
             count += 1
-        
+
         if shipment_date is not None:
             params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'shipment_date'
             params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = shipment_date[0]
@@ -1779,135 +1896,124 @@ class OrderHandler(Magento):
             params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = shipment_date[1]
             params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'to'
             count += 1
-        if total_due is not None:
-            params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'total_due'
-            params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = total_due
-            params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'eq'
-            count += 1
-        if total_paid is not None:
-            params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'total_paid'
-            params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = total_due
-            params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'eq'
-            count += 1
-        if skus is not None:
-            params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'increment_id'
-            params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = ','.join(skus)
-            params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'in'
-            count += 1
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'status'
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = 'complete'
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'neq'
-            # count += 1
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'status'
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = 'closed'
-            # params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'neq'
-            # count += 1
-        if status is not None:
-            params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'status'
-            params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = status
-            params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'eq'
-            count += 1
-        
-        #Filter out Canceled results
-        # params[f'searchCriteria[filterGroups][{count}][filters][0][field]'] = 'status'
-        # params[f'searchCriteria[filterGroups][{count}][filters][0][value]'] = 'canceled'
-        # params[f'searchCriteria[filterGroups][{count}][filters][0][conditionType]'] = 'neq'
 
-        # if bill_to_name:
-        #     params['searchCriteria[filterGroups][4][filters][0][field]'] = 'billing_address.firstname'
-        #     params['searchCriteria[filterGroups][4][filters][0][value]'] = 'Anna'
-        #     params['searchCriteria[filterGroups][4][filters][0][conditionType]'] = 'eq'
-        # Add other filter parameters here
         return params
 
 
+
+
+
     def process_orders_data(self, order_data):
-        # Process a single order and return a dictionary representing the order
-        # Extract necessary information from the order data and return it as a dictionary
-        order_list = []
-        orders = []
-        item_list = []
+        """
+        Processes order data to extract and format relevant order information.
 
+        Args:
+            order_data (dict): A dictionary containing orders and their details.
 
-        # for order in order_data.get('items', []):
-        #     for item in order.get('items', []):
-        #         order_list.append({
-        #             "increment_id": order.get('increment_id'),
-        #             "order_id": item.get('order_id')
-        #         })
-        # tracking_info = test.get_tracking(order_list)
+        Returns:
+            list: A list of dictionaries, each representing a processed order.
+        """
+        order_list = []  # Initialize a list to store individual orders (unused in current code)
+        orders = []  # Initialize a list to store the processed order dictionaries
+        item_list = []  # Initialize a list to store items (unused in current code)
 
-
-        # Process the retrieved orders data and filter by firstname
-        for order in order_data.get('items'):
-            for item in order.get('items',[]):
+        # Iterate through each order in the order_data
+        for order in order_data.get('items', []):
+            # Extract order_id from each item in the order
+            for item in order.get('items', []):
                 order_id = item.get('order_id')  # Extract order_id from items
 
+            # Extract the shipping address from order extension attributes
             shipping_address = order.get('extension_attributes', {}).get('shipping_assignments', [{}])[0].get('shipping', {}).get('address', {})
-            item_descriptions_bundle = [item.get('name', '') for item in order.get('items', []) if item.get('product_type') == 'bundle' ]
-            item_descriptions_simple = [item.get('name', '') for item in order.get('items', []) if item.get('product_type') == 'simple' ]
+
+            # Extract item descriptions and quantities, filtering by product type
+            item_descriptions_bundle = [item.get('name', '') for item in order.get('items', []) if item.get('product_type') == 'bundle']
+            item_descriptions_simple = [item.get('name', '') for item in order.get('items', []) if item.get('product_type') == 'simple']
             item_qty = [item.get('qty_ordered', '0') for item in order.get('items', []) if item.get('product_type') == 'simple']
-            print(item_qty)
-            item_barcodes_bundle = [item.get('sku', '') for item in order.get('items',[]) if item.get('product_type') == 'bundle']
-            item_barcodes_simple = [item.get('sku', '') for item in order.get('items',[]) if item.get('product_type') == 'simple']
-            item_shipped_simple_qty = [item.get('qty_shipped', '') for item in order.get('items',[]) if item.get('product_type') == 'simple']
-            item_shipped_bundle_qty = [item.get('qty_shipped', '') for item in order.get('items',[]) if item.get('product_type') == 'bundle']
-            non_blank_barcodes_descriptions_bundle = [desc for desc in item_barcodes_bundle if desc != '400140098286' ]
-            non_blank_barcodes_descriptions_simple = [desc for desc in item_barcodes_simple if desc != '400140098286' ]
-            # tracking_numbers = [tracking['tracking_number'] for tracking in tracking_info if tracking['order_id'] == order_id]
-            # shipment_date = [tracking['shipped_date'] for tracking in tracking_info if tracking['order_id'] == order_id ]
-            # Filter out duplicates using a set
+            print(item_qty)  # Print quantities for debugging
 
+            # Extract item barcodes and shipped quantities, filtering by product type
+            item_barcodes_bundle = [item.get('sku', '') for item in order.get('items', []) if item.get('product_type') == 'bundle']
+            item_barcodes_simple = [item.get('sku', '') for item in order.get('items', []) if item.get('product_type') == 'simple']
+            item_shipped_simple_qty = [item.get('qty_shipped', '') for item in order.get('items', []) if item.get('product_type') == 'simple']
+            item_shipped_bundle_qty = [item.get('qty_shipped', '') for item in order.get('items', []) if item.get('product_type') == 'bundle']
+
+            # Filter out blank or specific barcodes (e.g., '400140098286')
+            non_blank_barcodes_descriptions_bundle = [desc for desc in item_barcodes_bundle if desc != '400140098286']
+            non_blank_barcodes_descriptions_simple = [desc for desc in item_barcodes_simple if desc != '400140098286']
+
+            # Create a dictionary for each order with relevant details
             order_entry = {
-                'Order#': order.get('increment_id'),
-                'Order Date': order.get('created_at'),
-                'Customer Name': f"{order.get('customer_firstname')} {order.get('customer_lastname')}",
-                'Store Name': order.get('store_name', ''),
-                'Customer Email' : f"{shipping_address.get('email')}",
-                'Carrier Type': order.get('shipping_description'),
-                'Ship-to Name': f"{shipping_address.get('firstname', '')} {shipping_address.get('lastname', '')}",
-                'Shipping Address': f"{shipping_address.get('street', [''])[0]}, {shipping_address.get('city', '')}, {shipping_address.get('region', '')}, {shipping_address.get('postcode', '')}",
-                'SubTotal': int(order.get('subtotal',0)),
-                'Shipping and Handling': int(order.get('shipping_amount',0)),
-                'Total Due': order.get('total_due', 0),
-                'Total Paid': order.get('total_paid', 0),
-                'Grand Total': order.get('grand_total', 0),
-                'Total Refunded': order.get('total_refunded', 0),
-                'Bundle QTY Shipped': item_shipped_bundle_qty,
-                'Simple QTY Shipped': item_shipped_simple_qty,
-                'PO Number': order.get('payment',{}).get('po_number', ''),
-                'Simple Items': ', '.join(item_descriptions_simple),
-                'Bundle Items': ', '.join(item_descriptions_bundle),
-                'Status': order.get('status'),
-                'Number of Items Bundle': len(non_blank_barcodes_descriptions_bundle),
-                'Number of Items Simple': len(non_blank_barcodes_descriptions_simple),
-                'Barcode Bundle': ', '.join(non_blank_barcodes_descriptions_bundle),
-                'Barcode Simple': ', '.join(non_blank_barcodes_descriptions_simple),
-                'QTY' : ', '.join(str(item_qty)),
-                # 'Tracking': ', '.join(tracking_numbers),
-                # 'Shipped Date': ', '.join(shipment_date)
-                
-
-                
-                # 'Status': order['status'],
-                
+                'Order#': order.get('increment_id'),  # Order increment ID
+                'Order Date': order.get('created_at'),  # Date the order was created
+                'Customer Name': f"{order.get('customer_firstname')} {order.get('customer_lastname')}",  # Customer full name
+                'Store Name': order.get('store_name', ''),  # Name of the store
+                'Customer Email': shipping_address.get('email', ''),  # Customer's email address
+                'Carrier Type': order.get('shipping_description'),  # Description of the shipping carrier
+                'Ship-to Name': f"{shipping_address.get('firstname', '')} {shipping_address.get('lastname', '')}",  # Full name of the recipient
+                'Shipping Address': f"{shipping_address.get('street', [''])[0]}, {shipping_address.get('city', '')}, {shipping_address.get('region', '')}, {shipping_address.get('postcode', '')}",  # Complete shipping address
+                'SubTotal': int(order.get('subtotal', 0)),  # Order subtotal
+                'Shipping and Handling': int(order.get('shipping_amount', 0)),  # Shipping and handling fees
+                'Total Due': order.get('total_due', 0),  # Total amount due
+                'Total Paid': order.get('total_paid', 0),  # Total amount paid
+                'Grand Total': order.get('grand_total', 0),  # Grand total of the order
+                'Total Refunded': order.get('total_refunded', 0),  # Total amount refunded
+                'Bundle QTY Shipped': item_shipped_bundle_qty,  # Quantities of bundle items shipped
+                'Simple QTY Shipped': item_shipped_simple_qty,  # Quantities of simple items shipped
+                'PO Number': order.get('payment', {}).get('po_number', ''),  # Purchase order number
+                'Simple Items': ', '.join(item_descriptions_simple),  # Comma-separated list of simple item descriptions
+                'Bundle Items': ', '.join(item_descriptions_bundle),  # Comma-separated list of bundle item descriptions
+                'Status': order.get('status'),  # Order status
+                'Number of Items Bundle': len(non_blank_barcodes_descriptions_bundle),  # Number of unique bundle items
+                'Number of Items Simple': len(non_blank_barcodes_descriptions_simple),  # Number of unique simple items
+                'Barcode Bundle': ', '.join(non_blank_barcodes_descriptions_bundle),  # Comma-separated list of bundle item barcodes
+                'Barcode Simple': ', '.join(non_blank_barcodes_descriptions_simple),  # Comma-separated list of simple item barcodes
+                'QTY': ', '.join(str(qty) for qty in item_qty)  # Comma-separated list of quantities for simple items
+                # 'Tracking': ', '.join(tracking_numbers),  # (Commented out) Comma-separated list of tracking numbers
+                # 'Shipped Date': ', '.join(shipment_date)  # (Commented out) Comma-separated list of shipment dates
             }
+
+            # Add the processed order entry to the orders list
             orders.append(order_entry)
-        return orders
+        
+        return orders  # Return the list of processed orders
 
     def has_more_pages(self, page, total_count, page_size):
-        # Determine if there are more pages to fetch based on current page, total count, and page size
-        total_pages = math.ceil(total_count / page_size)
-        return page < total_pages
+        """
+        Determine if there are more pages of data to fetch.
+
+        Args:
+            page (int): The current page number.
+            total_count (int): The total number of items available.
+            page_size (int): The number of items per page.
+
+        Returns:
+            bool: True if there are more pages, False otherwise.
+        """
+        total_pages = math.ceil(total_count / page_size)  # Calculate total pages based on total count and page size
+        return page < total_pages  # Return True if the current page is less than the total number of pages
 
     def export_orders_to_excel(self, orders, file_save_location, file_name, date):
-        df = pd.DataFrame(orders)
-        df['Order Date'] = pd.to_datetime(df['Order Date'])
+        """
+        Export the processed orders data to an Excel file.
 
-        df.sort_values(by='Order Date', ascending=True, inplace=True)  # Change 'Order Date' to your desired column
+        Args:
+            orders (list): A list of dictionaries representing the processed orders.
+            file_save_location (str): The directory where the Excel file will be saved.
+            file_name (str): The name of the Excel file.
+            date (list or None): Optional date used to format the file name.
 
-        df = self.add_totals(df)
-        # Define the formatting options
+        Returns:
+            str: The file path of the exported Excel file.
+        """
+        df = pd.DataFrame(orders)  # Convert the orders list to a DataFrame
+        df['Order Date'] = pd.to_datetime(df['Order Date'])  # Convert 'Order Date' column to datetime format
+
+        df.sort_values(by='Order Date', ascending=True, inplace=True)  # Sort DataFrame by 'Order Date'
+
+        df = self.add_totals(df)  # Add totals to the DataFrame using a custom method
+
+        # Define the formatting options for financial columns
         format_mapping_totals = {
             'SubTotal': '${:,.2f}',
             'Shipping and Handling': '${:,.2f}',
@@ -1917,25 +2023,24 @@ class OrderHandler(Magento):
             'Total Refunded': '${:,.2f}'
         }
 
-        # Apply formatting to the columns
+        # Apply formatting to the specified columns
         for column, fmt in format_mapping_totals.items():
             df[column] = df[column].apply(fmt.format)
 
-        # Export DataFrame to Excel file
+        # Determine the file name and path based on the provided date or current date
         if date is not None:
-            update_date = datetime.strptime(date[0], '%Y-%m-%d')
-            formatted_date = update_date.strftime('%m.%Y')
+            update_date = datetime.strptime(date[0], '%Y-%m-%d')  # Parse the provided date
+            formatted_date = update_date.strftime('%m.%Y')  # Format the date as 'MM.YYYY'
         else:
-            # Get the current date and format it to display month and year
-            current_date = datetime.now()
-            formatted_date = current_date.strftime('%m.%Y')
+            current_date = datetime.now()  # Get the current date
+            formatted_date = current_date.strftime('%m.%Y')  # Format the current date as 'MM.YYYY'
 
-        excel_file_path = f"{file_save_location}/{formatted_date} {file_name}.xlsx"
+        excel_file_path = f"{file_save_location}/{formatted_date} {file_name}.xlsx"  # Generate the full file path
 
-        self.save_to_excel(df, excel_file_path)
+        self.save_to_excel(df, excel_file_path)  # Save the DataFrame to an Excel file
 
-        print(f'Orders exported to {excel_file_path} successfully.')
-        return excel_file_path
+        print(f'Orders exported to {excel_file_path} successfully.')  # Print a confirmation message
+        return excel_file_path  # Return the file path of the exported Excel file
                 
     
     # def Reeds_API_orders_Search(self, store, access_token, file_save_location, file_name, date=None,shipment_date=None, customer_email=None, customer_last=None,total_paid=None,total_due=None,status=None, page=1, page_size=500, excel_file_path=None, skus:list=None):
@@ -2072,240 +2177,240 @@ class ShipmentHandler(Magento):
         self.login_controller = login_controller
         if not self.login_controller.is_logged_in():
             self.login_controller.login()
-    def search_shipments(self,store, file_save_location, file_name,order_list=None, date=None, excel_file_path=None, page=1, page_size=500):
-        all_shipments = []   # Use a global variable to accumulate shipments across all pages
-        all_responses = []
-        order_ids_list = []
-        sku_attribute_mapping = {}
-        bundle_sku_mapping = {}
-        shipments_endpoint = f"{self.login_controller.api_endpoint}/shipments"
-        magento = OrderHandler(self.login_controller)
-        chunk_size = 500
-        if order_list:
-            # Call the order_search function to obtain order information
-            order_info_entries = magento.get_order_detailsorder_search(order_list)
+    # def search_shipments(self,store, file_save_location, file_name,order_list=None, date=None, excel_file_path=None, page=1, page_size=500):
+    #     all_shipments = []   # Use a global variable to accumulate shipments across all pages
+    #     all_responses = []
+    #     order_ids_list = []
+    #     sku_attribute_mapping = {}
+    #     bundle_sku_mapping = {}
+    #     shipments_endpoint = f"{self.login_controller.api_endpoint}/shipments"
+    #     magento = OrderHandler(self.login_controller)
+    #     chunk_size = 500
+    #     if order_list:
+    #         # Call the order_search function to obtain order information
+    #         order_info_entries = magento.get_order_detailsorder_search(order_list)
 
-            order_info_mapping = {order_info_entry.get('Order_ID'): order_info_entry for order_info_entry in order_info_entries}
+    #         order_info_mapping = {order_info_entry.get('Order_ID'): order_info_entry for order_info_entry in order_info_entries}
             
-            # Convert dictionary keys to a list and iterate in chunks
-            order_keys = list(order_info_mapping.keys())
-            for i in range(0, len(order_keys), chunk_size):
-                order_chunk = order_keys[i:i + chunk_size]  
-                params = {
-                    'searchCriteria[filterGroups][0][filters][0][field]': 'order_id',
-                    'searchCriteria[filterGroups][0][filters][0][value]': ','.join(map(str, order_chunk)),
-                    'searchCriteria[filterGroups][0][filters][0][conditionType]': 'in',
-                    'searchCriteria[pageSize]': page_size,
-                    'searchCriteria[currentPage]': page  # Set the page number
-                }
-                print("Order Chunk:", order_chunk, "\n\n\n\n")
-                response = requests.get(shipments_endpoint, headers=headers, params=params)
-                all_responses.extend(response.json().get('items', []))
-                print(all_responses)
-        else:
-            # Initialize params outside the loop
-            params = {
-                'searchCriteria[filterGroups][0][filters][0][field]': 'store_id',
-                'searchCriteria[filterGroups][0][filters][0][value]': store,
-                'searchCriteria[filterGroups][0][filters][0][conditionType]': 'eq',
-                'searchCriteria[pageSize]': page_size,
-                'searchCriteria[currentPage]': page  # Set the page number
-            }
+    #         # Convert dictionary keys to a list and iterate in chunks
+    #         order_keys = list(order_info_mapping.keys())
+    #         for i in range(0, len(order_keys), chunk_size):
+    #             order_chunk = order_keys[i:i + chunk_size]  
+    #             params = {
+    #                 'searchCriteria[filterGroups][0][filters][0][field]': 'order_id',
+    #                 'searchCriteria[filterGroups][0][filters][0][value]': ','.join(map(str, order_chunk)),
+    #                 'searchCriteria[filterGroups][0][filters][0][conditionType]': 'in',
+    #                 'searchCriteria[pageSize]': page_size,
+    #                 'searchCriteria[currentPage]': page  # Set the page number
+    #             }
+    #             print("Order Chunk:", order_chunk, "\n\n\n\n")
+    #             response = requests.get(shipments_endpoint, headers=headers, params=params)
+    #             all_responses.extend(response.json().get('items', []))
+    #             print(all_responses)
+    #     else:
+    #         # Initialize params outside the loop
+    #         params = {
+    #             'searchCriteria[filterGroups][0][filters][0][field]': 'store_id',
+    #             'searchCriteria[filterGroups][0][filters][0][value]': store,
+    #             'searchCriteria[filterGroups][0][filters][0][conditionType]': 'eq',
+    #             'searchCriteria[pageSize]': page_size,
+    #             'searchCriteria[currentPage]': page  # Set the page number
+    #         }
 
-            if date:
-                params['searchCriteria[filterGroups][1][filters][0][field]'] = 'created_at'
-                params['searchCriteria[filterGroups][1][filters][0][value]'] = datetime.strptime(date[0], '%Y-%m-%d').isoformat()
-                params['searchCriteria[filterGroups][1][filters][0][conditionType]'] = 'from'
-                params['searchCriteria[filterGroups][2][filters][0][field]'] = 'created_at'
-                params['searchCriteria[filterGroups][2][filters][0][value]'] = datetime.strptime(date[1], '%Y-%m-%d').isoformat()
-                params['searchCriteria[filterGroups][2][filters][0][conditionType]'] = 'to'
+    #         if date:
+    #             params['searchCriteria[filterGroups][1][filters][0][field]'] = 'created_at'
+    #             params['searchCriteria[filterGroups][1][filters][0][value]'] = datetime.strptime(date[0], '%Y-%m-%d').isoformat()
+    #             params['searchCriteria[filterGroups][1][filters][0][conditionType]'] = 'from'
+    #             params['searchCriteria[filterGroups][2][filters][0][field]'] = 'created_at'
+    #             params['searchCriteria[filterGroups][2][filters][0][value]'] = datetime.strptime(date[1], '%Y-%m-%d').isoformat()
+    #             params['searchCriteria[filterGroups][2][filters][0][conditionType]'] = 'to'
 
-            # Initial request outside the loop
-            response = requests.get(shipments_endpoint, headers=headers, params=params)
-            total_count = response.json().get('total_count', 0)
-            total_pages = math.ceil(total_count / page_size)
-            print(total_pages)
-            all_responses.extend(response.json().get('items', []))
-            print(f"Fetching page {page}...")
+    #         # Initial request outside the loop
+    #         response = requests.get(shipments_endpoint, headers=headers, params=params)
+    #         total_count = response.json().get('total_count', 0)
+    #         total_pages = math.ceil(total_count / page_size)
+    #         print(total_pages)
+    #         all_responses.extend(response.json().get('items', []))
+    #         print(f"Fetching page {page}...")
 
-            page += 1
+    #         page += 1
 
-            while page <= total_pages:  # Change condition to include the last page
-                # Update only the necessary parameters inside the loop
-                params['searchCriteria[currentPage]'] = page
-                response = requests.get(shipments_endpoint, headers=headers, params=params)
-                all_responses.extend(response.json().get('items', []))
-                print(f"Fetching page {page}...")
-                page += 1
+    #         while page <= total_pages:  # Change condition to include the last page
+    #             # Update only the necessary parameters inside the loop
+    #             params['searchCriteria[currentPage]'] = page
+    #             response = requests.get(shipments_endpoint, headers=headers, params=params)
+    #             all_responses.extend(response.json().get('items', []))
+    #             print(f"Fetching page {page}...")
+    #             page += 1
 
         
-        if not all_responses is None:
-        # Extract order IDs from the shipment data
-            if order_list is None:
+    #     if not all_responses is None:
+    #     # Extract order IDs from the shipment data
+    #         if order_list is None:
                 
-                for response in all_responses:
-                    order_ids_list.append(response.get('order_id'))
-                # Call the order_search function to obtain order information
-                order_info_entries = magento.order_search(order_numbers=order_ids_list)
-                order_info_mapping = {order_info_entry.get('Order_ID'): order_info_entry for order_info_entry in order_info_entries}
-            # Process the retrieved shipments data and filter by firstname
-            shipments = []
-            count = 0
-            type(all_responses)
-            sku_list = []
-            for shipment in all_responses:
-                for item in shipment.get('items'):
-                    if item.get('sku') in nwtf_sku_mapping:
-                        sku = nwtf_sku_mapping.get(item.get('sku')) 
-                    else:
-                        sku = item.get('sku')
+    #             for response in all_responses:
+    #                 order_ids_list.append(response.get('order_id'))
+    #             # Call the order_search function to obtain order information
+    #             order_info_entries = magento.order_search(order_numbers=order_ids_list)
+    #             order_info_mapping = {order_info_entry.get('Order_ID'): order_info_entry for order_info_entry in order_info_entries}
+    #         # Process the retrieved shipments data and filter by firstname
+    #         shipments = []
+    #         count = 0
+    #         type(all_responses)
+    #         sku_list = []
+    #         for shipment in all_responses:
+    #             for item in shipment.get('items'):
+    #                 if item.get('sku') in nwtf_sku_mapping:
+    #                     sku = nwtf_sku_mapping.get(item.get('sku')) 
+    #                 else:
+    #                     sku = item.get('sku')
 
-                    sku_list.append(sku)
+    #                 sku_list.append(sku)
 
-            all_product_responses = magento.product_search(sku_list)
-            brand = ""
-            style = ""
-            attribute_data = magento.product_get_attributes(['brand'])
+    #         all_product_responses = magento.product_search(sku_list)
+    #         brand = ""
+    #         style = ""
+    #         attribute_data = magento.product_get_attributes(['brand'])
 
-            for product in all_product_responses:
-                # Extract SKU and attribute_set_id from the returned data
+    #         for product in all_product_responses:
+    #             # Extract SKU and attribute_set_id from the returned data
 
-                sku = product.get('sku', '')
-                for custom_attribute in product.get('custom_attributes'):
-                    if custom_attribute.get('attribute_code') == 'style':
-                        style = custom_attribute.get('value')
-                    if custom_attribute.get('attribute_code') == 'brand':
-                        options = attribute_data.get('brand').get('options')
-                        for attribute in options:
-                            if attribute.get('value') == custom_attribute.get('value'):
-                                print(attribute.get('label'))
-                                brand = attribute.get('label','')
-                attribute_set_id = product.get('attribute_set_id', '')
-                if product.get('type_id') == 'bundle':
-                    bundle_sku_mapping[sku] = True
+    #             sku = product.get('sku', '')
+    #             for custom_attribute in product.get('custom_attributes'):
+    #                 if custom_attribute.get('attribute_code') == 'style':
+    #                     style = custom_attribute.get('value')
+    #                 if custom_attribute.get('attribute_code') == 'brand':
+    #                     options = attribute_data.get('brand').get('options')
+    #                     for attribute in options:
+    #                         if attribute.get('value') == custom_attribute.get('value'):
+    #                             print(attribute.get('label'))
+    #                             brand = attribute.get('label','')
+    #             attribute_set_id = product.get('attribute_set_id', '')
+    #             if product.get('type_id') == 'bundle':
+    #                 bundle_sku_mapping[sku] = True
 
-                # SKU already exists, update the mapping based on the attribute_set_id
-                if attribute_set_id == 24:
-                    sku_attribute_mapping[sku] = {
-                        'Type': "Firearm",
-                        'brand': brand,
-                        'style': style                          
-                                                }
-                    print("Set Firearm")
-                else:
-                    sku_attribute_mapping[sku] = {
-                        'Type': "Merch",
-                        'brand': brand,
-                        'style': style                          
-                                                }
-            auth_token = fedex_lookup.auth()
-            tracking_number_list = []
-            for shipment in all_responses:
-                tracking_number_list.extend(track['track_number'] for track in shipment.get('tracks', '') if track.get('track_number'))
-            tracking_number_info = fedex_lookup.track_package(auth_token,tracking_number_list)
+    #             # SKU already exists, update the mapping based on the attribute_set_id
+    #             if attribute_set_id == 24:
+    #                 sku_attribute_mapping[sku] = {
+    #                     'Type': "Firearm",
+    #                     'brand': brand,
+    #                     'style': style                          
+    #                                             }
+    #                 print("Set Firearm")
+    #             else:
+    #                 sku_attribute_mapping[sku] = {
+    #                     'Type': "Merch",
+    #                     'brand': brand,
+    #                     'style': style                          
+    #                                             }
+    #         auth_token = fedex_lookup.auth()
+    #         tracking_number_list = []
+    #         for shipment in all_responses:
+    #             tracking_number_list.extend(track['track_number'] for track in shipment.get('tracks', '') if track.get('track_number'))
+    #         tracking_number_info = fedex_lookup.track_package(auth_token,tracking_number_list)
 
-            for shipment in all_responses:
-                order_id = shipment.get('order_id')
-                order_info_entry = order_info_mapping.get(order_id)
-                tracking_numbers = [track['track_number'] for track in shipment.get('tracks', [])]
+    #         for shipment in all_responses:
+    #             order_id = shipment.get('order_id')
+    #             order_info_entry = order_info_mapping.get(order_id)
+    #             tracking_numbers = [track['track_number'] for track in shipment.get('tracks', [])]
 
-                for item in shipment.get('items'):
-                    if order_info_entry and not item.get('sku') in drop_sku_list:
-                        if item.get('sku') in nwtf_sku_mapping:
-                            sku = nwtf_sku_mapping.get(item.get('sku')) 
+    #             for item in shipment.get('items'):
+    #                 if order_info_entry and not item.get('sku') in drop_sku_list:
+    #                     if item.get('sku') in nwtf_sku_mapping:
+    #                         sku = nwtf_sku_mapping.get(item.get('sku')) 
 
-                        else:
-                            sku = item.get('sku')
-                        weight = tracking_number_info.get(tracking_numbers[0], {}).get('weight','')
-                        length = tracking_number_info.get(tracking_numbers[0], {}).get('length','')
-                        width = tracking_number_info.get(tracking_numbers[0], {}).get('width','')
-                        height = tracking_number_info.get(tracking_numbers[0], {}).get('height','')
-                        shipment_type = tracking_number_info.get(tracking_numbers[0], {}).get('Shipment Type','')
+    #                     else:
+    #                         sku = item.get('sku')
+    #                     weight = tracking_number_info.get(tracking_numbers[0], {}).get('weight','')
+    #                     length = tracking_number_info.get(tracking_numbers[0], {}).get('length','')
+    #                     width = tracking_number_info.get(tracking_numbers[0], {}).get('width','')
+    #                     height = tracking_number_info.get(tracking_numbers[0], {}).get('height','')
+    #                     shipment_type = tracking_number_info.get(tracking_numbers[0], {}).get('Shipment Type','')
 
-                        associated_shipments = tracking_number_info.get(tracking_numbers[0], {}).get('associated_shipments','')
-                        master_tracking_number =  tracking_number_info.get(tracking_numbers[0], {}).get('master_tracking_number','')
-                        print(sku_attribute_mapping)
-                        item_entry = {
-                            'Order#': order_info_entry.get('Order#'),
-                            'Shipment Date': shipment.get('created_at'),
-                            'Customer Name': order_info_entry.get('Customer Name'),
-                            'PO': order_info_entry.get('PO'),
-                            'Status': order_info_entry.get('Status'),
-                            'Master Pack': packing_array.get(item.get('sku', ''), ''),
-                            'Product Name': item.get('name', ''),
-                            'SKU': sku,
-                            'Brand': sku_attribute_mapping.get(sku,{}).get('brand',''),
-                            'Style': sku_attribute_mapping.get(sku,{}).get('style',''),
-                            'Quantity': item.get('qty', 0),
-                            'Price': item.get('price', 0),
-                            # Add other relevant fields as needed
-                            'Tracking Numbers': ', '.join(tracking_numbers) if tracking_numbers else '' ', '.join(tracking_numbers) if tracking_numbers else '',
-                            'Master Tracking Number': master_tracking_number,
-                            'Shipment Type': shipment_type,
-                            'Shipping Cost': '',
-                            'FedEx Shipping Vendor Tier Delivery Cost': '',
-                            'Total Shipping Per Order': '',
-                            'Weight (LB)': weight,
-                            'Length (IN)': length,
-                            'Width (IN)': width,
-                            'Height (IN)': height,
-                            'Ship To Name': order_info_entry.get('Ship To Name'),
-                            'City': order_info_entry.get('City'),
-                            'State':order_info_entry.get('State'),
-                            'Street': order_info_entry.get('Street'),
-                            'Total Shipping': order_info_entry.get('Total Shipping'),
-                            'Type': sku_attribute_mapping.get(sku,{}).get('Type',''),
-                            'Associated Shipments': associated_shipments,
-                            'Picking Fee: Item 1': '',
-                            'Additional Picks for Same Order':'',
-                            'Carton Cost of Order':'',
-                            'Total Fulfillment Costs, except for Shipping Cost': ''
+    #                     associated_shipments = tracking_number_info.get(tracking_numbers[0], {}).get('associated_shipments','')
+    #                     master_tracking_number =  tracking_number_info.get(tracking_numbers[0], {}).get('master_tracking_number','')
+    #                     print(sku_attribute_mapping)
+    #                     item_entry = {
+    #                         'Order#': order_info_entry.get('Order#'),
+    #                         'Shipment Date': shipment.get('created_at'),
+    #                         'Customer Name': order_info_entry.get('Customer Name'),
+    #                         'PO': order_info_entry.get('PO'),
+    #                         'Status': order_info_entry.get('Status'),
+    #                         'Master Pack': packing_array.get(item.get('sku', ''), ''),
+    #                         'Product Name': item.get('name', ''),
+    #                         'SKU': sku,
+    #                         'Brand': sku_attribute_mapping.get(sku,{}).get('brand',''),
+    #                         'Style': sku_attribute_mapping.get(sku,{}).get('style',''),
+    #                         'Quantity': item.get('qty', 0),
+    #                         'Price': item.get('price', 0),
+    #                         # Add other relevant fields as needed
+    #                         'Tracking Numbers': ', '.join(tracking_numbers) if tracking_numbers else '' ', '.join(tracking_numbers) if tracking_numbers else '',
+    #                         'Master Tracking Number': master_tracking_number,
+    #                         'Shipment Type': shipment_type,
+    #                         'Shipping Cost': '',
+    #                         'FedEx Shipping Vendor Tier Delivery Cost': '',
+    #                         'Total Shipping Per Order': '',
+    #                         'Weight (LB)': weight,
+    #                         'Length (IN)': length,
+    #                         'Width (IN)': width,
+    #                         'Height (IN)': height,
+    #                         'Ship To Name': order_info_entry.get('Ship To Name'),
+    #                         'City': order_info_entry.get('City'),
+    #                         'State':order_info_entry.get('State'),
+    #                         'Street': order_info_entry.get('Street'),
+    #                         'Total Shipping': order_info_entry.get('Total Shipping'),
+    #                         'Type': sku_attribute_mapping.get(sku,{}).get('Type',''),
+    #                         'Associated Shipments': associated_shipments,
+    #                         'Picking Fee: Item 1': '',
+    #                         'Additional Picks for Same Order':'',
+    #                         'Carton Cost of Order':'',
+    #                         'Total Fulfillment Costs, except for Shipping Cost': ''
                             
-                        }
-                        count += 1
-                        all_shipments.append(item_entry)
-                    else:
-                        print(f"Order information not found for order ID: {order_id}")
+    #                     }
+    #                     count += 1
+    #                     all_shipments.append(item_entry)
+    #                 else:
+    #                     print(f"Order information not found for order ID: {order_id}")
 
 
-        # Export DataFrame to Excel file after processing the last page
-        df = pd.DataFrame(all_shipments)
-        # Replace 'Master Pack' with the actual column header you are searching for
-        column_to_search = 'Master Pack'
+    #     # Export DataFrame to Excel file after processing the last page
+    #     df = pd.DataFrame(all_shipments)
+    #     # Replace 'Master Pack' with the actual column header you are searching for
+    #     column_to_search = 'Master Pack'
 
-        # Check if the column exists in the DataFrame
-        if column_to_search in df.columns:
-            # Check if all values in the column are empty strings
-            if (df[column_to_search] == '').all():
-                # Remove the column
-                df = df.drop(columns=[column_to_search])
-        # Define the formatting options
-        format_mapping_totals = {
-            'SubTotal': '${:,.2f}',
-            'Shipping and Handling': '${:,.2f}',
-            'Total Due': '${:,.2f}',
-            'Total Paid': '${:,.2f}',
-            'Grand Total': '${:,.2f}',
-            'Total Refunded': '${:,.2f}'
-        }
+    #     # Check if the column exists in the DataFrame
+    #     if column_to_search in df.columns:
+    #         # Check if all values in the column are empty strings
+    #         if (df[column_to_search] == '').all():
+    #             # Remove the column
+    #             df = df.drop(columns=[column_to_search])
+    #     # Define the formatting options
+    #     format_mapping_totals = {
+    #         'SubTotal': '${:,.2f}',
+    #         'Shipping and Handling': '${:,.2f}',
+    #         'Total Due': '${:,.2f}',
+    #         'Total Paid': '${:,.2f}',
+    #         'Grand Total': '${:,.2f}',
+    #         'Total Refunded': '${:,.2f}'
+    #     }
 
-        if excel_file_path is None:
-            # Export DataFrame to Excel file
-            if date is not None:
-                update_date = datetime.strptime(date[0], '%Y-%m-%d')
-                formatted_date = update_date.strftime('%m.%Y')
-            else:
-                # Get the current date and format it to display month and year
-                current_date = datetime.now()
-                formatted_date = current_date.strftime('%m.%Y')
+    #     if excel_file_path is None:
+    #         # Export DataFrame to Excel file
+    #         if date is not None:
+    #             update_date = datetime.strptime(date[0], '%Y-%m-%d')
+    #             formatted_date = update_date.strftime('%m.%Y')
+    #         else:
+    #             # Get the current date and format it to display month and year
+    #             current_date = datetime.now()
+    #             formatted_date = current_date.strftime('%m.%Y')
 
-            excel_file_path = f"{file_save_location}/{formatted_date} {file_name}.xlsx"
+    #         excel_file_path = f"{file_save_location}/{formatted_date} {file_name}.xlsx"
 
-        magento.save_to_excel(df, excel_file_path)
+    #     magento.save_to_excel(df, excel_file_path)
 
-        print(f'Shipments exported to {excel_file_path} successfully.')
+    #     print(f'Shipments exported to {excel_file_path} successfully.')
 
-        return all_shipments
+    #     return all_shipments
     
 if __name__ == "__main__":
-    
+    pass
