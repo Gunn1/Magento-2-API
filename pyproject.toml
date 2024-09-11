@@ -25,3 +25,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Gunn1/Magento-2-API/tree/main"
 Issues = "https://github.com/Gunn1/Magento-2-API/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/magento_api_2"]
