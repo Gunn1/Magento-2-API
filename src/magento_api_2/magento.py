@@ -897,6 +897,8 @@ class Params:
                 })
 
         return params_dict
+    
+
 
 class LoginController:
     """
@@ -906,16 +908,14 @@ class LoginController:
     and checks the validity of the login session based on the token expiration time.
     """
 
-    token = None
-    store = "default"
-    api_endpoint = f"https://admin.reedssports.com/rest/{store}/V1"
-    logged_in = False
-    login_time = None
-    token_expiration = timedelta(hours=4)  # Set the token expiration time (4 hours in this example)
-
     def __init__(self, username=None, password=None):
         """Initialize the LoginController with a username and password. 
         If not provided, prompts the user for input."""
+        self.token = None
+        self.store = "default"
+        self.logged_in = False
+        self.api_endpoint = f"https://admin.reedssports.com/rest/{self.store}/V1"
+        self.token_expiration = timedelta(hours=4)  # Set the token expiration time (4 hours in this example)
         self.username = username
         self.password = password
         if not self.username or not self.password:
@@ -961,11 +961,11 @@ class LoginController:
 
 
 class Magento:
-    def make_api_request(self, endpoint: str, params: Params = None, request_type: str = "get", data: dict = None,json:dict = None) -> dict:
+    def make_api_request(self, endpoint: str, params: Params = None, request_type: str = "get", data: dict = None, json:dict = None) -> dict:
         if not self.login_controller.is_logged_in():
             raise InvalidCredentialsError("Please log in to access product details.")
         """
-        Makes an API request of the specified type (GET, POST, DELETE) to the given endpoint.
+        Makes an API request of the specified type (GET, POST, DELETE, PUT) to the given endpoint.
 
         Args:
             endpoint (str): The API endpoint to send the request to.
@@ -1716,14 +1716,17 @@ class OrderHandler(Magento):
             # Create a new Excel file and write the DataFrame to the 'All_Orders' sheet
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='All_Orders')
+    def fetch_order_data(self, params: Params):
+        endpoint = f"{self.login_controller.api_endpoint}/orders"
+        return self.make_api_request(endpoint,request_type='get', params=params)
 
-    def fetch_orders(self, headers, params, orders):
+    def fetch_orders(self, headers, params: Params, orders):
         """
         Fetches orders from the API based on the provided headers and parameters.
         
         Args:
             headers (dict): The headers to include in the API request, typically containing authorization info.
-            params (dict): The query parameters to include in the API request.
+            params (Params): The query parameters to include in the API request.
             orders (list): A list to store the fetched orders.
         
         This method sends an API request to fetch orders based on the given parameters.
@@ -2166,7 +2169,9 @@ class OrderHandler(Magento):
     def create_order(self,entity: Entity) -> dict:
         endpoint = f"{self.login_controller.api_endpoint}/orders"
         return self.make_api_request(endpoint,request_type='post',data=entity.to_json())
-
+    def get_comments(self, order_id: str) -> dict:
+        endpoint = f"{self.login_controller.api_endpoint}/orders/{order_id}/comments"
+        return self.make_api_request(endpoint,request_type='get')
 
 class ShipmentHandler(Magento):
     def __init__(self, login_controller):
@@ -2413,4 +2418,18 @@ class ShipmentHandler(Magento):
     #     return all_shipments
     
 if __name__ == "__main__":
-    pass
+    logincontroller = LoginController()
+    headers = {
+        "Authorization": f"Bearer {logincontroller.token}",
+        "Accept": "application/json",
+        "Content-Type" : "application/json"
+        }
+    orderhandler = OrderHandler(logincontroller)
+    order_number = "65000000212"
+    filtergroup = FilterGroup()
+    filtergroup.add_filter('eq', 'entity_id', order_number)
+    params = Params(filterGroups=filtergroup)
+    print(params.to_dict())
+    orderhandler.fetch_order_data(params)
+    orderhandler.get_comments()
+    
