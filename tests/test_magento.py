@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 's
 
 def test_import_magento_api_2():
     try:
-        import magento_api_2.magento
-        import magento_api_2.gui
+        import magento_2.magento
+        import magento_2.gui
     except ImportError as e:
         pytest.fail(f"Import failed: {e}")
