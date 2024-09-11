@@ -2,8 +2,8 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 [project]
-name = "magento-api-2"
-version = "0.0.6"
+name = "magento-2"
+version = "0.0.1"
 authors = [
   { name="Gunn1", email="tylerjgunn@proton.me" },
 ]
@@ -23,5 +23,5 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Gunn1/Magento-API/tree/main"
-Issues = "https://github.com/Gunn1/Magento-API/issues"
+Homepage = "https://github.com/Gunn1/Magento-2-API/tree/main"
+Issues = "https://github.com/Gunn1/Magento-2-API/issues"
