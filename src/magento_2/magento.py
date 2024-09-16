@@ -955,7 +955,8 @@ class LoginController:
         if elapsed_time > self.token_expiration:
             print("Token has expired.")
             self.logged_in = False
-            return False
+            print("Attempting to re-login")
+            return self.login()
         else:
             return True
 
