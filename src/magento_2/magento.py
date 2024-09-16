@@ -908,13 +908,13 @@ class LoginController:
     and checks the validity of the login session based on the token expiration time.
     """
 
-    def __init__(self, username=None, password=None):
+    def __init__(self, endpoint, username=None, password=None):
         """Initialize the LoginController with a username and password. 
         If not provided, prompts the user for input."""
         self.token = None
         self.store = "default"
         self.logged_in = False
-        self.api_endpoint = f"https://admin.reedssports.com/rest/{self.store}/V1"
+        self.api_endpoint = f"{endpoint}{self.store}/V1"
         self.token_expiration = timedelta(hours=4)  # Set the token expiration time (4 hours in this example)
         self.username = username
         self.password = password
