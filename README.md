@@ -19,17 +19,10 @@ Installation
 
 To use this package, you need to have Python installed on your system. Install the package using pip:
 
-bash
-
-Copy code
 
 `pip install magento-2`
 
 Alternatively, clone the repository and install it manually:
-
-bash
-
-Copy code
 
 `git clone https://github.com/Gunn1/Magento-2-API.git
 cd Magento-API
