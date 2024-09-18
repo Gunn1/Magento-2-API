@@ -1618,8 +1618,87 @@ class ProductHandler(Magento):
 
         endpoint = f"{self.login_controller.api_endpoint}/products/{sku}"
         return self.make_api_request(endpoint, request_type='put', data=product_data)
+    def product_get_attributes(self, attribute_code:list) -> dict:
+        attribute_dict = {}
+        endpoint = f"{self.login_controller.api_endpoint}/products/attributes"
+        filtergroup = FilterGroup()
+        for attribute in attribute_code:
+            filtergroup.add_filter('in', 'attribute_code', attribute)
+        params = Params(filterGroups=filtergroup)
+        attribute_codes_data = self.make_api_request(endpoint, request_type='get',params=params)
+        for attribute_data in attribute_codes_data.get('items'):
+            if attribute_data.get('attribute_code') in attribute_code:
+                attribute_code = attribute_data.get('attribute_code')
+                attribute_label = attribute_data.get('default_frontend_label')
+                options = attribute_data.get('options')
+                custom_attributes = attribute_data.get('custom_attributes')
+                frontend_labels = attribute_data.get('frontend_labels')
+                attribute_dict.update({
+                    attribute_code: {
+                    'attribute_label':attribute_label,
+                    'options': options,
+                    'custom_attributes': custom_attributes,
+                    'frontend_labels': frontend_labels
+                    }
+                })
 
+        return attribute_dict
+    def product_search(self, skus: list) -> dict:
+        """
+        Search for product by sku.
 
+        Args:
+            skus (list): List of sku numbers of products
+        """
+        endpoint = f"{self.login_controller.api_endpoint}/products"
+        product_data = []
+        all_responses = []
+        chunk_size = 500
+
+        for i in range(0, len(skus), chunk_size):
+            sku_chunk = skus[i:i + chunk_size]
+            filtergroup = FilterGroup()
+            filtergroup.add_filter('in', 'sku', ','.join(sku_chunk))
+            params = Params(filterGroups=filtergroup)
+            try:
+                response = self.make_api_request(endpoint, headers=headers, params=params)
+                response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
+
+                product_chunk_data = response.json()
+                all_responses.extend(product_chunk_data.get('items', []))
+            except requests.exceptions.RequestException as e:
+                print("An error occurred while searching for the product: %s", str(e))
+                return None
+
+        product_data = all_responses
+        return product_data
+    def save_to_excel(df, file_path):
+        file_exists = os.path.exists(file_path)
+
+        if file_exists:
+            while True:
+                try:
+                    wb = load_workbook(file_path)
+                    break  # If loading succeeds, break out of the loop
+                except PermissionError as e:
+                    print(f"Permission denied. Retrying in 5 seconds...")
+                    time.sleep(5)
+                except Exception as e:
+                    print(f"Error loading workbook: {e}")
+                    return
+
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+                try:
+                    idx = writer.book.sheetnames.index('All_Orders')
+                    writer.book.remove(writer.book.worksheets[idx])
+                except ValueError:
+                    pass  # 'All_Orders' sheet doesn't exist, no need to remove
+
+                df.to_excel(writer, index=False, sheet_name='All_Orders', header=True)
+        else:
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='All_Orders')
+        
 class OrderHandler(Magento):
     """
     A class to handle order-related operations using the Magento API.
@@ -1751,7 +1830,7 @@ class OrderHandler(Magento):
             # Set the error event to indicate an issue
             self.error_event.set()
 
-    def Reeds_API_orders_Search(self, store, access_token, file_save_location, file_name, date=None, shipment_date=None, customer_email=None, customer_last=None, total_paid=None, total_due=None, status=None, page=1, page_size=500, excel_file_path=None, skus=None):
+    def Reeds_API_orders_Search(self, store, file_save_location, file_name, date=None, shipment_date=None, customer_email=None, customer_last=None, total_paid=None, total_due=None, status=None, page=1, page_size=500, excel_file_path=None, skus=None):
         """
         Searches for orders using the Reeds API and exports them to an Excel file.
         
