@@ -2284,16 +2284,6 @@ class OrderHandler(Magento):
         retry_delay = 30  # seconds between retries
 
         def fetch_orders(search_field, ids):
-            """
-            Helper function to make API calls in chunks with retries.
-
-            Parameters:
-            - search_field (str): The search field (e.g., 'entity_id' or 'increment_id').
-            - ids (list): List of IDs (order numbers or increment IDs) to search.
-
-            Returns:
-            - None. Results are added to `all_responses`.
-            """
             seen_ids = set()
             for i in range(0, len(ids), chunk_size):
                 chunk = ids[i:i + chunk_size]
@@ -2308,28 +2298,30 @@ class OrderHandler(Magento):
                 while retries < max_retries:
                     try:
                         response = self.make_api_request(orders_endpoint, params=params)
+                        if not response or 'items' not in response:
+                            print(f"No 'items' found in response for params: {params}")
+                            break
                         data = response.get('items', [])
 
-                        # Deduplicate based on `entity_id` or `increment_id`
                         for order in data:
                             order_id = order.get(search_field)
                             if order_id not in seen_ids:
                                 seen_ids.add(order_id)
                                 all_responses.append(order)
 
-                        break  # Break out of retry loop if successful
+                        break
 
                     except APIRequestError as e:
-                        print(f"Request failed: {e}, Retrying...")
+                        print(f"APIRequestError: {e}, Retrying...")
                     except Exception as e:
                         print(f"Unexpected error: {e}")
 
                     retries += 1
                     time.sleep(retry_delay)
 
-                else:
-                    # If max retries are reached without success, log the error
-                    print(f"Max retries reached for chunk starting at index {i}. Could not retrieve order data.")
+                if retries >= max_retries:
+                    print(f"Max retries reached for chunk starting at index {i}. Params: {params}")
+
 
         # Fetch by order numbers if provided
         if order_numbers:
