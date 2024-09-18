@@ -1661,7 +1661,7 @@ class ProductHandler(Magento):
             filtergroup.add_filter('in', 'sku', ','.join(sku_chunk))
             params = Params(filterGroups=filtergroup)
             try:
-                response = self.make_api_request(endpoint, headers=headers, params=params)
+                response = self.make_api_request(endpoint, params=params)
                 response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
 
                 product_chunk_data = response.json()
@@ -2252,6 +2252,104 @@ class OrderHandler(Magento):
     def get_comments(self, order_id: str) -> dict:
         endpoint = f"{self.login_controller.api_endpoint}/orders/{order_id}/comments"
         return self.make_api_request(endpoint,request_type='get')
+    def order_search(self, increment_ids: list = None, order_numbers: list = None):
+        """
+        Retrieves order information by order numbers or increment IDs.
+
+        Parameters:
+        - increment_ids (list): List of increment IDs for orders to search.
+        - order_numbers (list): List of order numbers (entity_id) to search.
+
+        Returns:
+        - order_info (list): A list of dictionaries containing order details like:
+            - 'Order#'
+            - 'Order_ID'
+            - 'Customer Name'
+            - 'PO'
+            - 'Status'
+            - 'Ship To Name'
+            - 'City'
+            - 'State'
+            - 'Street'
+            - 'Total Shipping'
+        """
+        orders_endpoint = f"{self.login_controller.api_endpoint}/orders"
+        order_info = []
+        all_responses = []
+        chunk_size = 500
+
+        # Retry parameters
+        max_retries = 3
+        retry_delay = 30  # seconds between retries
+
+        def fetch_orders(search_field, ids):
+            """
+            Helper function to make API calls in chunks with retries.
+
+            Parameters:
+            - search_field (str): The search field (e.g., 'entity_id' or 'increment_id').
+            - ids (list): List of IDs (order numbers or increment IDs) to search.
+
+            Returns:
+            - None. Results are added to `all_responses`.
+            """
+            for i in range(0, len(ids), chunk_size):
+                retries = 0
+                while retries < max_retries:
+                    chunk = ids[i:i + chunk_size]
+                    filtergroup = FilterGroup()
+                    filtergroup.add_filter('in', 'entity_id', ','.join(map(str, chunk)))
+                    params = Params(filterGroups=filtergroup)
+
+                    try:
+                        response = self.make_api_request(orders_endpoint, params=params)
+                        print(f"Request {i} success - Status: {response.status_code}")
+                        all_responses.extend(response.get('items', []))
+
+                    except requests.RequestException as e:
+                        print(f"Request {i} failed: {e}, Retrying...")
+
+                    retries += 1
+                    time.sleep(retry_delay)
+
+                else:
+                    # If max retries are reached without success, log and exit
+                    print(f"Max retries reached for chunk {i}. Could not retrieve order data.")
+                    exit()
+
+        # Fetch by order numbers if provided
+        if order_numbers:
+            fetch_orders('entity_id', order_numbers)
+
+        # Fetch by increment IDs if provided
+        if increment_ids:
+            fetch_orders('increment_id', increment_ids)
+
+        # Process the responses and construct the order information
+        for order in all_responses:
+            try:
+                shipping = order.get('extension_attributes', {}).get('shipping_assignments', [])[0].get('shipping', {}).get('address', {})
+                payment_po = order.get('payment', {}).get('po_number', None)
+
+                order_entry = {
+                    'Order#': order.get('increment_id'),
+                    'Order_ID': order.get('entity_id'),
+                    'Customer Name': f"{order.get('customer_firstname', '')} {order.get('customer_lastname', '')}",
+                    'PO': payment_po,
+                    'Status': order.get('status'),
+                    'Ship To Name': f"{shipping.get('firstname', '')} {shipping.get('lastname', '')}",
+                    'City': shipping.get('city', ''),
+                    'State': shipping.get('region_code', ''),
+                    'Street': shipping.get('street', [''])[0],
+                    'Total Shipping': shipping.get('total', {}).get('base_shipping_amount', 0)
+                }
+
+                order_info.append(order_entry)
+
+            except (IndexError, AttributeError) as e:
+                print(f"Error processing order {order.get('increment_id')}: {e}")
+
+        return order_info
 
 class ShipmentHandler(Magento):
     def __init__(self, login_controller):
