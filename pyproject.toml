@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 [project]
 name = "magento-2"
-version = "0.0.5"
+version = "0.0.6"
 authors = [
-  { name="Gunn1", email="tylerjgunn@proton.me" },
+  { name="Gunn1", email="tylerjgunn@gmail.com" },
 ]
 description = "A python module for interacting with the Magento 2 REST API. GUI"
 readme = "README.md"
