@@ -788,6 +788,7 @@ class FilterGroup:
 
         self.filters.append(Filter('from', 'created_at', date_from))
         self.filters.append(Filter("to", 'created_at', date_to))
+        
 
     def to_dict(self):
         """
@@ -962,9 +963,9 @@ class LoginController:
 
 
 class Magento:
-    def make_api_request(self, endpoint: str, params: Params = None, request_type: str = "get", data: dict = None, json:dict = None) -> dict:
-        if not self.login_controller.is_logged_in():
-            raise InvalidCredentialsError("Please log in to access product details.")
+    import requests
+
+    def make_api_request(self, endpoint: str, params: Params = None, request_type: str = "get", data: dict = None, json: dict = None) -> dict:
         """
         Makes an API request of the specified type (GET, POST, DELETE, PUT) to the given endpoint.
 
@@ -982,37 +983,46 @@ class Magento:
         Returns:
             dict: The response data from the API request if successful.
         """
+        if not self.login_controller.is_logged_in():
+            raise InvalidCredentialsError("Please log in to access product details.")
+
         headers = {
-        "Authorization": f"Bearer {self.login_controller.token}",
-        "Accept": "application/json",
-        "Content-Type" : "application/json"
+            "Authorization": f"Bearer {self.login_controller.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json"
         }
-        if request_type.lower() == "get":
-            response = requests.get(endpoint, headers=headers, params=params.to_dict() if params is not None else None)
-            append_json_with_timestamp(response.json()) if response.json() else None
-        elif request_type.lower() == "post":
-            response = requests.post(endpoint, headers=headers, params=params.to_dict() if params is not None else None, data=data if data is not None else None, json=json if json is not None else None)
-            print(response.text)
-            append_json_with_timestamp(response.json()) if response.json() else None
-        elif request_type.lower() == "delete":
-            response = requests.delete(endpoint, headers=headers, params=params.to_dict() if params is not None else None)
-            append_json_with_timestamp(response.json()) if response.json() else None
 
-        elif request_type.lower() == "put":
-            response = requests.put(endpoint, headers=headers, params=params.to_dict() if params is not None else None,data=data if data is not None else None, json=json if json is not None else None)
-            print(response.text)
-            append_json_with_timestamp(response.json()) if response.json() else None
+    # Determine if params is a Params object or a dictionary
+        if hasattr(params, 'to_dict') and callable(params.to_dict):
+            params = params.to_dict()
+        
+        try:
+            if request_type.lower() == "get":
+                response = requests.get(endpoint, headers=headers, params=params if params else None)
+            elif request_type.lower() == "post":
+                response = requests.post(endpoint, headers=headers, params=params if params else None, data=data, json=json)
+            elif request_type.lower() == "delete":
+                response = requests.delete(endpoint, headers=headers, params=params if params else None)
+            elif request_type.lower() == "put":
+                response = requests.put(endpoint, headers=headers, params=params if params else None, data=data, json=json)
+            else:
+                raise ValueError(f"Unsupported request type: {request_type}")
 
-        else:
-            raise ValueError(f"Unsupported request type: {request_type}")
+            if response.status_code == requests.codes.ok:
+                response_data = response.json()
+                append_json_with_timestamp(response_data) if response_data else None
+                return response_data
+            elif response.status_code == 401:
+                raise PermissionDeniedError("Permission denied. Please check your credentials.")
+            else:
+                # Log or print the response for debugging
+                error_message = f"Error {response.status_code}: {response.text}"
+                raise APIRequestError(f"Failed to fetch data from {endpoint}. {error_message}")
 
-        if response.status_code == requests.codes.ok:
-            return response.json()
-        elif response.status_code == 401:
-            raise PermissionDeniedError()
-        else:
-            raise APIRequestError(f"Failed to fetch data from {endpoint}" + response.text)
-    
+        except requests.RequestException as e:
+            # Catch any other request exceptions and log them
+            raise APIRequestError(f"Request error: {e}")
+
     # def save_details(self, data, type):
     #     self.type = type
     #     if not self.login_controller.is_logged_in():
@@ -1657,14 +1667,15 @@ class ProductHandler(Magento):
 
         for i in range(0, len(skus), chunk_size):
             sku_chunk = skus[i:i + chunk_size]
-            filtergroup = FilterGroup()
-            filtergroup.add_filter('in', 'sku', ','.join(sku_chunk))
-            params = Params(filterGroups=filtergroup)
+            params = {
+                'searchCriteria[filterGroups][0][filters][0][field]': 'sku',
+                'searchCriteria[filterGroups][0][filters][0][value]': ','.join(sku_chunk),
+                'searchCriteria[filterGroups][0][filters][0][conditionType]': 'in',
+                'searchCriteria[pageSize]': 1000
+            }
             try:
                 response = self.make_api_request(endpoint, params=params)
-                response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
-
-                product_chunk_data = response.json()
+                product_chunk_data = response
                 all_responses.extend(product_chunk_data.get('items', []))
             except requests.exceptions.RequestException as e:
                 print("An error occurred while searching for the product: %s", str(e))
@@ -2252,7 +2263,7 @@ class OrderHandler(Magento):
     def get_comments(self, order_id: str) -> dict:
         endpoint = f"{self.login_controller.api_endpoint}/orders/{order_id}/comments"
         return self.make_api_request(endpoint,request_type='get')
-    def order_search(self, increment_ids: list = None, order_numbers: list = None):
+    def order_search(self, increment_ids: list = None, order_numbers: list = None) -> list:
         """
         Retrieves order information by order numbers or increment IDs.
 
@@ -2261,17 +2272,7 @@ class OrderHandler(Magento):
         - order_numbers (list): List of order numbers (entity_id) to search.
 
         Returns:
-        - order_info (list): A list of dictionaries containing order details like:
-            - 'Order#'
-            - 'Order_ID'
-            - 'Customer Name'
-            - 'PO'
-            - 'Status'
-            - 'Ship To Name'
-            - 'City'
-            - 'State'
-            - 'Street'
-            - 'Total Shipping'
+        - order_info (list): A list of dictionaries containing order details.
         """
         orders_endpoint = f"{self.login_controller.api_endpoint}/orders"
         order_info = []
@@ -2293,29 +2294,42 @@ class OrderHandler(Magento):
             Returns:
             - None. Results are added to `all_responses`.
             """
+            seen_ids = set()
             for i in range(0, len(ids), chunk_size):
+                chunk = ids[i:i + chunk_size]
+                params = {
+                    'searchCriteria[filterGroups][0][filters][0][field]': search_field,
+                    'searchCriteria[filterGroups][0][filters][0][value]': ','.join(map(str, chunk)),
+                    'searchCriteria[filterGroups][0][filters][0][conditionType]': 'in',
+                    'searchCriteria[pageSize]': 1000
+                }
+
                 retries = 0
                 while retries < max_retries:
-                    chunk = ids[i:i + chunk_size]
-                    filtergroup = FilterGroup()
-                    filtergroup.add_filter('in', 'entity_id', ','.join(map(str, chunk)))
-                    params = Params(filterGroups=filtergroup)
-
                     try:
                         response = self.make_api_request(orders_endpoint, params=params)
-                        print(f"Request {i} success - Status: {response.status_code}")
-                        all_responses.extend(response.get('items', []))
+                        data = response.get('items', [])
 
-                    except requests.RequestException as e:
-                        print(f"Request {i} failed: {e}, Retrying...")
+                        # Deduplicate based on `entity_id` or `increment_id`
+                        for order in data:
+                            order_id = order.get(search_field)
+                            if order_id not in seen_ids:
+                                seen_ids.add(order_id)
+                                all_responses.append(order)
+
+                        break  # Break out of retry loop if successful
+
+                    except APIRequestError as e:
+                        print(f"Request failed: {e}, Retrying...")
+                    except Exception as e:
+                        print(f"Unexpected error: {e}")
 
                     retries += 1
                     time.sleep(retry_delay)
 
                 else:
-                    # If max retries are reached without success, log and exit
-                    print(f"Max retries reached for chunk {i}. Could not retrieve order data.")
-                    exit()
+                    # If max retries are reached without success, log the error
+                    print(f"Max retries reached for chunk starting at index {i}. Could not retrieve order data.")
 
         # Fetch by order numbers if provided
         if order_numbers:
@@ -2328,7 +2342,7 @@ class OrderHandler(Magento):
         # Process the responses and construct the order information
         for order in all_responses:
             try:
-                shipping = order.get('extension_attributes', {}).get('shipping_assignments', [])[0].get('shipping', {}).get('address', {})
+                shipping = order.get('extension_attributes', {}).get('shipping_assignments', [{}])[0].get('shipping', {}).get('address', {})
                 payment_po = order.get('payment', {}).get('po_number', None)
 
                 order_entry = {
